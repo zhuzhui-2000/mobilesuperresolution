@@ -11,17 +11,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from torchvision.utils import save_image
 
-import common.meters
-import common.modes
-import common.metrics
-
-from utils.estimate import test
-from utils import logging_tool
-from collections import OrderedDict
-
-import models
-from utils import attr_extractor, loss_printer
-from loss_config import update_weight
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 import numpy as np
@@ -30,7 +19,7 @@ import random
 warnings.simplefilter("ignore", UserWarning)
 class Result_Model(nn.Module):
 
-    def __init__(self, scale, filename):
+    def __init__(self, scale, channel=48,blocks=7, kernel=3, weight=1920, height=1080):
         super(Result_Model, self).__init__()
 
         self.image_mean = 0.5
@@ -39,9 +28,9 @@ class Result_Model(nn.Module):
         weight_norm = torch.nn.utils.weight_norm
         num_inputs = 3
         self.scale = scale
-        self.idx = self.file_reader(filename)
-        self.IN = self.idx[0][0]
-
+        self.IN = channel
+        self.weight = weight
+        self.height = height
         num_outputs = scale * scale * num_inputs
 
         body = []
@@ -53,21 +42,18 @@ class Result_Model(nn.Module):
                 padding=kernel_size // 2))
         body.append(conv)
 
-        for block in self.idx:
-            IN = block[0]
-            split = block[1]
-            kernel_size = block[2]
+        for block in range(blocks):
             body.append(Block(
-                IN=IN,
-                split=split,
-                kernel_size=kernel_size,
+                IN=channel,
+                split=channel,
+                kernel_size=kernel,
                 weight_norm=weight_norm)
             )
 
         conv = weight_norm(
             nn.Conv2d(
                 self.IN,
-                num_outputs,
+                channel,
                 kernel_size,
                 padding=kernel_size // 2))
 
@@ -84,38 +70,36 @@ class Result_Model(nn.Module):
         self.skip = conv
 
         shuf = []
-        if scale == 4:
-            shuf.append(nn.Conv2d(IN,IN*4,3,stride=1,padding=1))
-            shuf.append(nn.PixelShuffle(2))
-            shuf.append(nn.LeakyReLU())
-            shuf.append(nn.Conv2d(IN,IN*4,3,stride=1,padding=1))
-            shuf.append(nn.PixelShuffle(2))
-            shuf.append(nn.LeakyReLU())
-            shuf.append(nn.Conv2d(IN,3,3,stride=1,padding=1))
+
+        shuf.append(nn.ConvTranspose2d(channel,3,5,stride=scale))
+
+
         self.shuf = nn.Sequential(*shuf)
+
+            # shuf.append(nn.Conv2d(channel,channel*4,3,stride=1,padding=1))
+            # shuf.append(nn.PixelShuffle(2))
+            # shuf.append(nn.LeakyReLU())
+            # shuf.append(nn.Conv2d(channel,channel*4,3,stride=1,padding=1))
+            # shuf.append(nn.PixelShuffle(2))
+            # shuf.append(nn.LeakyReLU())
+            # shuf.append(nn.Conv2d(channel,3,3,stride=1,padding=1))
+        
         
         self.img_upsample = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
+        
 
     def forward(self, x):
-        t=time.time()
-        B, N, C, H, W = x.shape
-        x_list = []
-        for image in range(N):
-            x_in = x[:,image,:,:,:]
-            base = nn.functional.interpolate(x_in, scale_factor=4, mode='bilinear', align_corners=False)
-            # x_in = x_ - self.image_mean
-            x_ = self.body(x_in) 
-            x_ = self.shuf(x_) + base
-            x_list.append(x_)
-        print((time.time()-t)/N)
-        return torch.stack(x_list,dim=1)
+        
+        B, C, H, W = x.shape
 
-    def file_reader(self, filename):
-        with open(filename, 'r') as f:
-            status = eval(f.readlines()[-1].replace('\n', ''))[1]
-        self.IN = status[0][0]
-        print(status)
-        return status
+        x_in = x
+        # base = nn.functional.interpolate(x_in, scale_factor=4, mode='bilinear', align_corners=False)
+        # x_in = x_ - self.image_mean
+        x_ = self.body(x_in) + x
+        x_ = self.shuf(x_) 
+        x_ = nn.functional.interpolate(x_,size=(self.weight,self.height),mode='bilinear')
+        
+        return x_
 
 
 class Block(nn.Module):
@@ -136,11 +120,9 @@ class Block(nn.Module):
 
     def forward(self, x):
         
-        if(self.split > 0):
-            x_1, x = torch.split(x,[self.split,self.conv_channel],dim=1)
+
         x = self.body(x) + x
-        if(self.split > 0):
-            x = torch.cat((x_1,x),dim=1)
+
         return x
 
 class Conv_sep(nn.Module):
