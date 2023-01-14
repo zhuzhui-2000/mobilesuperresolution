@@ -11,12 +11,12 @@ class ConvBlockModel(nn.Module):
     def __init__(self, num_feat=3, pretrained=False, weight=None):
         super(ConvBlockModel, self).__init__()
 
-        self.fc1 = nn.Linear(num_feat, 128)
-        self.fc2 = nn.Linear(128, 256)
-        self.fc3 = nn.Linear(256, 512)
-        self.fc6 = nn.Linear(512, 256)
-        self.fc7 = nn.Linear(256, 128)
-        self.fc8 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(num_feat, 32)
+        self.fc2 = nn.Linear(32, 64)
+        self.fc3 = nn.Linear(64, 128)
+        self.fc6 = nn.Linear(128, 64)
+        self.fc7 = nn.Linear(64, 32)
+        self.fc8 = nn.Linear(32, 1)
 
         self._initialize_weights()
         if pretrained:
@@ -52,6 +52,7 @@ class ConvBlockModel(nn.Module):
                     m.bias.data.fill_(0)
 
     def _load_pretrained(self, weight):
+        print(weight)
         self.load_state_dict(torch.load(weight), strict=False)
 
     def frozen_layer(self):
@@ -59,12 +60,12 @@ class ConvBlockModel(nn.Module):
             p.requires_grad = False
 
 
-def block_b(mobile_device, compute_device, scale=2):
-    return ConvBlockModel(num_feat=4, pretrained=True,
-                          weight=f'{FILE_PATH}/weights/{mobile_device}/{compute_device}/block_b_x{scale}.pt')
+def block_b(mobile_device, compute_device, scale=2, n_feat=4):
+    return ConvBlockModel(num_feat=n_feat, pretrained=True,
+                          weight=f'{FILE_PATH}/weights/{mobile_device}/{compute_device}/{compute_device}.pt')
 
 
 if __name__ == "__main__":
     model = block_b(mobile_device='S21', compute_device='GPU', scale=2)
     test_input = torch.tensor([24, 144, 20, 24], dtype=torch.float)
-    print(model(test_input))
+

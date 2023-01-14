@@ -1,14 +1,14 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0
 
 # Experiments
 
 model_type='BASIC_MODEL'  # NAS_MODEL / BASIC_MODEL
 
 epochs=30
-num_patches=1000    # default 1000
+num_patches=200    # default 1000
 train_batch_size=16 # default 16
-lr_patch_size=48    # default 48
+lr_patch_size=96    # default 48
 
 # arch
 scale=2
@@ -42,10 +42,10 @@ fi
 
 printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 
-python -m torch.distributed.run --nproc_per_node $num_gpus --master_port $(((RANDOM % 1000 + 5000))) pretrain.py \
+python  pretrain_simplified_model.py \
   --model_type $model_type \
   --dataset div2k \
-  --eval_datasets set5 \
+  --eval_datasets urban100 \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
@@ -53,6 +53,6 @@ python -m torch.distributed.run --nproc_per_node $num_gpus --master_port $(((RAN
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --distributed \
+  --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Nov27_19_01_41/block_index.txt' \
   --job_dir runs/$job_dir
 

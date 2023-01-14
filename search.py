@@ -25,6 +25,7 @@ from utils.loss import *
 from utils import attr_extractor, loss_printer, SpeedScheduler
 from loss_config import update_weight
 from speed_models import get_ori_speed
+from models.result_net import Result_Model
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 warnings.simplefilter("ignore", UserWarning)
@@ -51,7 +52,7 @@ def train(model,
     losses = {}
 
     for batch_idx, (lr, hr) in enumerate(train_data_loader):
-
+        
         hr_label = hr.clone().detach().to(device, non_blocking=True)
         lr = lr.to(device, non_blocking=True)
 
@@ -82,6 +83,7 @@ def train(model,
             current_blocks = module.get_current_blocks()
             block_meter.update(current_blocks)
             remain_idx = module.get_block_status()
+            
             remain_width = module.get_width_from_block_idx(remain_idx)
 
         loss.backward()
@@ -107,7 +109,7 @@ def train(model,
 
             writer.add_scalar('training_loss', loss.item(), total_batches)
             writer.add_scalar('Loss/l1', loss_sr_l1, total_batches)
-            total_epochs = params.epochs + params.width_epochs + params.finetune_epochs
+            total_epochs = params.epochs + params.width_epochs + params.kernel_epochs
             s = f"## Epoch: {epoch:{' '}{'>'}{2}d}/{total_epochs:d}\t" \
                 f"Iters:{batch_idx:{' '}{'>'}{len(str(nb))}d}/{nb:d}({batch_idx / nb * 100:.2f}%)\t" \
                 f"Epoch-est. {time_meter.remain_time}\t" \
@@ -151,12 +153,12 @@ def evaluation(model, eval_data_loaders, epoch, writer, device):
             handle_dict = {'job_dir': writer.get_logdir(),
                            'epoch': epoch,
                            'eval_data_name': eval_data_name, }
-            psnr, psnr_y, ssim, speed = test(eval_data_loader, model, gpu=device, f=handle_dict)
+            psnr, psnr_y, ssim, speed, bilinear = test(eval_data_loader, model, gpu=device, f=handle_dict)
             writer.add_scalar(f"{eval_data_name}/PSNR", psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/PSNR_Y", psnr_y, epoch)
             writer.add_scalar(f"{eval_data_name}/SSIM", ssim, epoch)
             logging.info(f"##\tEval: {eval_data_name}\t"
-                         f"PSNR: {psnr:.4f}\tPSNR_Y: {psnr_y:.4f}\tSSIM: {ssim:.4f}")
+                         f"PSNR: {psnr:.4f}\tPSNR_Y: {psnr_y:.4f}\tPSNR_bilinear: {bilinear:.4f}\tSSIM: {ssim:.4f}")
         try:
             writer.add_scalar(f"Arch/Speed", speed.item(), epoch)
             logging.info(f"##\tModel Speed {speed.item():.04f}", device=device)
@@ -365,7 +367,7 @@ def main(params, logging):
                         }, os.path.join(params.job_dir, "ckpt", f"latest.pth"))
         scheduler.step()
 
-    logging.info("Fine-tune Training", device=device)
+    logging.info("Kernel Training", device=device)
     params.weight_sr_l1 = 1
     if params.distributed:
         model = model.module
@@ -379,10 +381,10 @@ def main(params, logging):
 
     optimizer, scheduler = trainer_preparation(model=model,
                                                learning_rate=params.learning_rate,
-                                               epochs=params.finetune_epochs)
+                                               epochs=params.kernel_epochs)
 
-    end_epoch += params.finetune_epochs
-    params.model_type = 'BASIC_MODEL'
+    end_epoch += params.kernel_epochs
+    params.model_type = 'NAS_MODEL'
     for epoch in range(epoch + 1, end_epoch + 1):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
@@ -402,8 +404,56 @@ def main(params, logging):
                         }, os.path.join(params.job_dir, "ckpt", f"latest.pth"))
         scheduler.step()
 
+    # logging.info("Fine-tune Training", device=device)
+    # params.weight_sr_l1 = 1
+    # if params.distributed:
+    #     model = model.module
+    #     model.length_grad(False)
+    #     model.mask_grad(False)
+    #     model = DDP(model.to(device), device_ids=[device], output_device=device)
+
+    # else:
+    #     model.length_grad(False)
+    #     model.mask_grad(False)
+    
+
+    # module = model.module if hasattr(model, 'module') else model
+    # current_blocks = module.get_current_blocks()
+    # remain_idx = module.get_block_status()
+    
+    # remain_width = module.get_width_from_block_idx(remain_idx)
+
+    # result_model = Result_Model(scale=params.scale,blocks=current_blocks,idx=remain_idx)
+
+    # optimizer, scheduler = trainer_preparation(model=model,
+    #                                            learning_rate=params.learning_rate,
+    #                                            epochs=params.kernel_epochs)
+
+    # end_epoch += params.finetune_epochs
+    # params.model_type = 'NAS_MODEL'
+    # for epoch in range(epoch + 1, end_epoch + 1):
+    #     if train_sampler is not None:
+    #         train_sampler.set_epoch(epoch)
+
+    #     train(model=model, optimizer=optimizer,
+    #           train_data_loader=train_data_loader,
+    #           criterions=criterions,
+    #           writer=writer, params=params, epoch=epoch, device=device)
+    #     evaluation(model, eval_data_loaders, epoch, writer, device=device)
+    #     if device == 0:
+    #         torch.save(model.state_dict() if not params.distributed else model.module.state_dict(),
+    #                    os.path.join(params.job_dir, 'weights', 'models.pt'))
+    #         torch.save({"epoch": epoch,
+    #                     "state_dict": model.state_dict() if not params.distributed else model.module.state_dict(),
+    #                     "optimizer": optimizer.state_dict(),
+    #                     "scheduler": scheduler.state_dict(),
+    #                     }, os.path.join(params.job_dir, "ckpt", f"latest.pth"))
+    #     scheduler.step()
+
     if not params.eval_only and device == 0:
         writer.close()
+
+
 
     logging.info(f"Finish Training", device=device)
 
@@ -440,6 +490,8 @@ if __name__ == '__main__':
                         help='Number of width-only search epochs.')
     parser.add_argument('--finetune_epochs', default=30, type=int,
                         help='Number of fine-tune epochs.')
+    parser.add_argument('--kernel_epochs', default=10, type=int,
+                        help='Number of kernel epochs.')
     parser.add_argument('--log_steps', default=100, type=int,
                         help='Number of steps for training logging.')
     parser.add_argument('--opt_level', default='O1', type=str,
@@ -461,6 +513,8 @@ if __name__ == '__main__':
     # for multi GPU
     parser.add_argument('--distributed', default=False, action='store_true',
                         help='Distributed training')
+
+
 
     # Parse arguments
     args, _ = parser.parse_known_args()

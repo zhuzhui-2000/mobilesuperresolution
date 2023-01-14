@@ -9,6 +9,7 @@ from skimage import img_as_float, img_as_ubyte
 
 import torch.utils.data as data
 import torchvision.transforms as transforms
+import time
 
 import common.modes
 import common.io
@@ -55,6 +56,7 @@ class ImageSuperResolutionDataset(data.Dataset):
         self.hr_files = hr_files
 
     def __getitem__(self, index):
+        # t = time.time()
         if self.mode == common.modes.PREDICT:
             lr_image = np.asarray(Image.open(self.lr_files[index][1]))
             lr_image = transforms.functional.to_tensor(lr_image)
@@ -62,7 +64,7 @@ class ImageSuperResolutionDataset(data.Dataset):
 
         if self.mode == common.modes.TRAIN:
             index = index // self.params.num_patches
-
+        
         lr_image, hr_image = self._load_item(index)
         lr_image, hr_image = self._sample_patch(lr_image, hr_image)
         lr_image, hr_image = self._augment(lr_image, hr_image)
@@ -71,6 +73,7 @@ class ImageSuperResolutionDataset(data.Dataset):
         hr_image = np.ascontiguousarray(hr_image)
         lr_image = transforms.functional.to_tensor(lr_image)
         hr_image = transforms.functional.to_tensor(hr_image)
+        # print(time.time()-t)
         if self.mode == common.modes.TRAIN:
             return lr_image, hr_image
         elif self.mode == common.modes.EVAL:
@@ -158,6 +161,7 @@ class ImageSuperResolutionHdf5Dataset(ImageSuperResolutionDataset):
                     self.hr_cache_file.add(hr_file[0], np.asarray(Image.open(hr_file[1])))
 
     def _load_item(self, index):
+        
         lr_image = self.lr_cache_file.get(self.lr_files[index][0])
         hr_image = self.hr_cache_file.get(self.hr_files[index][0])
         return lr_image, hr_image

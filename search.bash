@@ -1,23 +1,24 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=1
 
 # Experiments
 
 model_type='NAS_MODEL'  # NAS_MODEL / BASIC_MODEL
 
-speed_target=100    # target latency in ms
+speed_target=500    # target latency in ms
 
-width_epochs=10     # width only search epoch
-epochs=20           # width+depth search epoch
-finetune_epochs=30  # fine-tune epoch
-num_patches=1000    # default 1000
+width_epochs=15     # width only search epoch
+epochs=15           # width+depth search epoch
+finetune_epochs=20  # fine-tune epoch
+kernel_epochs=10
+num_patches=200    # default 1000
 train_batch_size=16 # default 16
 lr_patch_size=48    # default 48
 
 # arch
 scale=2
 num_blocks=16
-num_residual_units=24
+num_residual_units=32
 
 num_gpus=$(awk -F '[0-9]' '{print NF-1}' <<<"$CUDA_VISIBLE_DEVICES")
 echo Using $num_gpus GPUs
@@ -46,11 +47,11 @@ fi
 
 printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 
-python -m torch.distributed.run --nproc_per_node $num_gpus --master_port $(((RANDOM % 1000 + 5000))) search.py \
+python3 search.py \
   --model_type $model_type \
   --speed_target $speed_target \
   --dataset div2k \
-  --eval_datasets set5 set14 urban100 bsds100 \
+  --eval_datasets urban100 \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
@@ -60,9 +61,8 @@ python -m torch.distributed.run --nproc_per_node $num_gpus --master_port $(((RAN
   --width_epochs $width_epochs \
   --epochs $epochs \
   --finetune_epochs $finetune_epochs \
+  --kernel_epochs $kernel_epochs \
   --width_search \
-  --pretrained \
-  --distributed \
   --job_dir runs/$job_dir
 
 

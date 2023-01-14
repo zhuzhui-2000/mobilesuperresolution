@@ -3,12 +3,14 @@
 import torch
 import torch.nn.functional as F
 from skimage.metrics import structural_similarity
+from mmedit.core.evaluation.metrics import psnr,ssim
 import numpy as np
 
 
 def psnr(sr, hr, shave=4):
     sr = sr.to(hr.dtype)
     sr = (sr * 255).round().clamp(0, 255) / 255
+    sr = sr.clamp(0,1)
     diff = sr - hr
     if shave:
         diff = diff[..., shave:-shave, shave:-shave]
@@ -19,7 +21,9 @@ def psnr(sr, hr, shave=4):
 
 def psnr_y(sr, hr, shave=4):
     sr = sr.to(hr.dtype)
-    sr = (sr * 255).round().clamp(0, 255) / 255
+    r = (sr * 255).round().clamp(0, 255) / 255
+    sr = sr.clamp(0,1)
+    
     diff = sr - hr
     if diff.shape[1] == 3:
         filters = torch.tensor([0.257, 0.504, 0.098],
@@ -30,6 +34,7 @@ def psnr_y(sr, hr, shave=4):
         diff = diff[..., shave:-shave, shave:-shave]
     mse = diff.pow(2).mean([-3, -2, -1])
     psnr = -10 * mse.log10()
+    
     return psnr.mean()
 
 

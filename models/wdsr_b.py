@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import math
+from os import sep
 
 import torch
 import torch.nn as nn
@@ -41,6 +42,9 @@ class NAS_MODEL(nn.Module):
         self.num_residual_units = params.num_residual_units
         self.remain_blocks = params.num_blocks
         self.width_search = params.width_search
+        self.idx_kernel = [3,5,7]
+        # self.bottle = params.bottleneck_type
+        # self.seperate = params.seperate
 
         num_outputs = scale * scale * params.num_channels
 
@@ -58,7 +62,7 @@ class NAS_MODEL(nn.Module):
 
         body = nn.ModuleList()
         for _ in range(params.num_blocks):
-            body.append(AggregationLayer(
+            body.append(MyAggregationLayer(
                 num_residual_units=params.num_residual_units,
                 kernel_size=kernel_size,
                 weight_norm=weight_norm,
@@ -103,10 +107,10 @@ class NAS_MODEL(nn.Module):
     def forward(self, x):
         x = x - self.image_mean
         y = self.head(x)
-        speed_accu = x.new_zeros(1)
+        speed_accu = x.new_zeros(1) #TODO：这个地方它没有考虑shuf和skip的时延，或者说他没有考虑基本框架的时延，这个需要改一改哈
         for module in self.body:
             if self.width_search:
-                speed_curr = self.speed_estimator.estimateByMask(module, self.mask)
+                speed_curr = self.speed_estimator.estimateByMyMask(module, self.mask)
             else:
                 speed_curr = self.speed_estimator.estimateByChannelNum(module)
             y = self.mask(y)
@@ -115,14 +119,28 @@ class NAS_MODEL(nn.Module):
             y = self.mask(y)
         y = self.tail(y) + self.skip(x)
         y = self.shuf(y)
-        y = y + self.image_mean
-        return y, speed_accu
+        out = y + self.image_mean
+        # batch_size, channels, in_height, in_width = y.size()
+        
+        # channels = channels / (self.scale * self.scale)
+        # out = torch.split(y, self.scale * self.scale, dim=1)
+        # out = [torch.reshape(a,(batch_size,1,self.scale,self.scale,in_height,in_width)) for a in out]
+        # out = [torch.transpose(a,4,2) for a in out]
+        # out = [torch.transpose(a,4,3) for a in out]
+        # out = [torch.transpose(a,4,5) for a in out]
+        # out = [torch.reshape(a,(batch_size,1,self.scale*in_height,self.scale*in_width)) for a in out]
+        # out = torch.cat(out,1)
+
+        # out = out + self.image_mean
+        
+
+        return out, speed_accu
 
     @torch.no_grad()
     def get_current_blocks(self):
         num_blocks = 0
         for module in self.body.children():
-            if isinstance(module, AggregationLayer):
+            if isinstance(module, MyAggregationLayer):
                 if module.alpha1 < module.alpha2:  # not skip
                     num_blocks += 1
         return int(num_blocks)
@@ -131,7 +149,8 @@ class NAS_MODEL(nn.Module):
     def get_block_status(self):
         remain_block_idx = []
         for idx, module in enumerate(self.body.children()):
-            if isinstance(module, AggregationLayer):
+            
+            if isinstance(module, MyAggregationLayer):
                 alpha1, alpha2 = F.softmax(torch.stack([module.alpha1, module.alpha2], dim=0), dim=0)
                 if alpha1 < alpha2:  # not skip
                     remain_block_idx.append(idx)
@@ -143,34 +162,42 @@ class NAS_MODEL(nn.Module):
         def _get_width_from_weight(w):
             return int(rounding(w).sum())
 
+        def _get_width_from_split(w,w_mask):
+            return int((rounding(w_mask) * rounding(w)).sum())
+
         all_width = []
         for idx, module in enumerate(self.body.children()):
             width = []
-            if idx in remain_block_idx and isinstance(module, AggregationLayer):
+            if idx in remain_block_idx and isinstance(module, MyAggregationLayer):
                 # width.append(_get_width_from_weight(module.block_mask.weight))
                 width.append(_get_width_from_weight(self.mask.weight))
-                for m in module.body.children():
-                    if isinstance(m, BinaryConv2d):
-                        width.append(_get_width_from_weight(m.weight))
+                
+                width.append(_get_width_from_split(module.split.weight,self.mask.weight))
+
+                
+                max_value, max_index = torch.max(module.alpha,0)
+                
+                best_kernel = self.idx_kernel[max_index]
+                width.append(best_kernel)
                 all_width.append(width)
         return all_width
 
     @torch.no_grad()
     def get_alpha_grad(self):
         for module in self.body.children():
-            if isinstance(module, AggregationLayer):
+            if isinstance(module, MyAggregationLayer):
                 return module.alpha1.grad, module.alpha2.grad
 
     @torch.no_grad()
     def get_alpha(self):
         for module in self.body.children():
-            if isinstance(module, AggregationLayer):
+            if isinstance(module, MyAggregationLayer):
                 return module.alpha1, module.alpha2
 
     @torch.no_grad()
     def length_grad(self, flag=False):
         for module in self.body.children():
-            if isinstance(module, AggregationLayer):
+            if isinstance(module, MyAggregationLayer):
                 module.alpha1.requires_grad = flag
                 module.alpha2.requires_grad = flag
                 module.beta1.requires_grad = flag
@@ -179,12 +206,23 @@ class NAS_MODEL(nn.Module):
     @torch.no_grad()
     def mask_grad(self, flag=False):
         for module in self.body.children():
-            if isinstance(module, AggregationLayer):
+            if isinstance(module, MyAggregationLayer):
                 # module.block_mask.weight.requires_grad = flag
-                for m in module.body.children():
-                    if isinstance(m, BinaryConv2d):
-                        m.weight.requires_grad = flag
+                    module.split.weight.requires_grad = flag
         self.mask.weight.requires_grad = flag
+
+    @torch.no_grad()
+    def kernel_grad(self, flag=False):
+        for module in self.body.children():
+            if isinstance(module, MyAggregationLayer):
+                # module.block_mask.weight.requires_grad = flag
+                max_value, max_index = torch.max(module.alpha,0)
+                temp = torch.zeros(3)
+                temp[max_index] = 1
+                module.alpha = temp
+                module.alpha.requires_grad = flag
+        
+        pass
 
     @torch.no_grad()
     def get_mask_grad(self):
@@ -334,6 +372,186 @@ class AggregationLayer(Block):
         channels.append(channels[0])
         return channels
 
+class Conv_sep(nn.Module):
+    def __init__(self, input_dim, output_dim, kernal_size,weight_norm=torch.nn.utils.weight_norm, seperate=False):
+        super(Conv_sep,self).__init__()
+        self.seperate = seperate
+        self.kernel_size = kernal_size
+        
+        body = []
+        if self.seperate :
+            conv = weight_norm(nn.Conv2d(input_dim, input_dim, kernal_size, padding = kernal_size // 2, groups = input_dim))
+            # init.constant_(conv.weight_g, 2.0)
+            # init.zeros_(conv.bias)
+            body.append(conv)
+            body.append(nn.ReLU(inplace=True))
+            conv = weight_norm(nn.Conv2d(input_dim, output_dim, 1, padding=1 // 2,))
+            # init.constant_(conv.weight_g, 2.0)
+            # init.zeros_(conv.bias)
+            body.append(conv)
+        else:
+            conv = weight_norm(nn.Conv2d(input_dim, output_dim, kernal_size, padding=kernal_size // 2))
+            # init.constant_(conv.weight_g, 2.0)
+            # init.zeros_(conv.bias)
+            body.append(conv)
+        
+        self.body = nn.Sequential(*body)
+
+    def forward(self, x):
+        x = self.body(x)
+        return x
+
+
+class Split_Block(nn.Module):
+
+    def __init__(self,
+                 num_residual_units,
+                 kernel_size,
+                 weight_norm=torch.nn.utils.weight_norm,
+                 res_scale=1,
+                 width_search=False,
+                 block_type = 'normal', #block_type = 'inverted_bottle', 'bottle', 'normal'
+                 seperate_type = True):  
+        super(Split_Block, self).__init__()
+        
+        expand = 6
+        linear = 0.84
+        # Choose
+        self.alpha = nn.Parameter(data=torch.ones(3), requires_grad=True)
+        init.uniform_(self.alpha, 0.5, 1.5)
+        self.beta = nn.Parameter(data=torch.zeros(3), requires_grad=True)
+
+        self.split = BinaryConv2d(num_residual_units,num_residual_units,groups=num_residual_units, least_channel=0)
+        # print(rounding(self.split.weight.detach()).sum())
+        self.kernel_list = ['3','5','7']
+        # if block_type == 'inverted_bottle':
+        #     conv = weight_norm(
+        #         nn.Conv2d(
+        #             num_residual_units,
+        #             int(num_residual_units * expand),
+        #             1,
+        #             padding=1 // 2))
+        #     # init.constant_(conv.weight_g, 2.0)
+        #     # init.zeros_(conv.bias)
+
+        #     body.append(conv)
+        #     body.append(nn.ReLU(inplace=True))
+        #     if width_search:
+        #         # mask for second layer
+        #         body.append(BinaryConv2d(in_channels=int(num_residual_units * expand),
+        #                                 out_channels=int(num_residual_units * expand),
+        #                                 groups=int(num_residual_units * expand)))
+
+        #     conv = Conv_sep(num_residual_units * expand, num_residual_units, kernel_size, seperate=seperate_type)
+        #     body.append(conv)
+
+        self.body=nn.ModuleDict()
+        
+
+        for kernel_ in self.kernel_list:
+            body = []
+            if block_type == 'normal':
+                conv = Conv_sep(num_residual_units, num_residual_units, int(kernel_), seperate=seperate_type)
+                body.append(conv)
+                body.append(nn.ReLU(inplace=True))
+            self.body[kernel_] = nn.Sequential(*body) 
+            # self.body_list.append(self.body)
+
+
+        # if block_type == 'bottle':
+        #     conv = weight_norm(
+        #         nn.Conv2d(
+        #             num_residual_units,
+        #             int(num_residual_units * linear),
+        #             1,
+        #             padding=1 // 2))
+        #     # init.constant_(conv.weight_g, 2.0)
+        #     # init.zeros_(conv.bias)
+
+        #     body.append(conv)
+        #     body.append(nn.ReLU(inplace=True))
+        #     if width_search:
+        #         # mask for second layer
+        #         body.append(BinaryConv2d(in_channels=int(num_residual_units * linear),
+        #                                 out_channels=int(num_residual_units * linear),
+        #                                 groups=int(num_residual_units * linear)))
+
+        #     conv = Conv_sep(int(num_residual_units * linear), num_residual_units, kernel_size, seperate=seperate_type)
+        #     body.append(conv)
+
+    def forward_body(self, x):
+        x_1 = self.split(x) 
+        x_2 = x - x_1
+        x_3 = torch.clone(x_2)
+
+        pro = F.softmax(self.alpha)
+        
+        
+        
+        for i, kernel_ in enumerate(self.kernel_list):
+            x_ = (self.body[kernel_](x_1))*pro[i]
+            x_3 = x_3 + x_
+        x_3 = x_3 + x_1
+        x_cat = x_2 + self.split(x_3) 
+        return x_cat
+
+    def forward(self, x):
+        # x = self.block_mask(x)
+
+        return self.forward_body(x)
+
+class MyAggregationLayer(Split_Block):
+    def __init__(self, **kwargs):
+        super(MyAggregationLayer, self).__init__(**kwargs)
+
+        # Skip
+        self.alpha1 = nn.Parameter(data=torch.empty(1), requires_grad=True)
+        self.beta1 = nn.Parameter(data=torch.zeros(1), requires_grad=True)
+        init.uniform_(self.alpha1, 0, 0.2)
+
+        # Preserve
+        self.alpha2 = nn.Parameter(data=torch.empty(1), requires_grad=True)
+        self.beta2 = nn.Parameter(data=torch.ones(1), requires_grad=True)
+        init.uniform_(self.alpha2, 0.8, 1)
+
+    def forward(self, x, speed_curr, speed_accu):
+        # model_output = input
+        # x = input.sr
+        # speed_accu = input.speed_accu
+        #
+        # speed_curr = input.speed_curr
+        if self.training:
+            # self.alpha1.data, self.alpha2.data = F.gumbel_softmax(torch.stack([self.alpha1.data, self.alpha2.data],
+            #                                                                   dim=0), dim=0, hard=False)
+            # self.alpha1.data, self.alpha2.data = F.softmax(torch.stack([self.alpha1.data, self.alpha2.data],
+            #                                                            dim=0), dim=0)
+            # Get skip result
+            sr1 = x
+            # Get block result
+            sr2 = self.forward_body(x)
+
+            beta1, beta2 = ConditionFunction.apply(self.alpha1, self.alpha2, self.beta1, self.beta2)
+            self.beta1.data, self.beta2.data = beta1, beta2
+            x = beta1 * sr1 + beta2 * sr2
+            # model_output.speed_accu = beta2 * speed_curr + speed_accu
+            speed_accu = beta2 * speed_curr + speed_accu
+            return x, speed_accu
+        else:
+            if self.alpha1 >= self.alpha2:
+                pass
+            else:
+                x = self.forward_body(x)
+            # model_output.speed_accu = speed_accu + self.beta2 * speed_curr
+            speed_accu = speed_accu + self.beta2 * speed_curr
+            return x, speed_accu
+
+    def get_num_channels(self):
+        channels = []
+        for m in self.body.children():
+            if isinstance(m, nn.Conv2d):
+                channels.append(m.in_channels)
+        channels.append(channels[0])
+        return channels
 
 class AggregationFunction(torch.autograd.Function):
 

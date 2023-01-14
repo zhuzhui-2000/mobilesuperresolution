@@ -16,6 +16,8 @@ def update_argparser(parser: argparse.ArgumentParser):
     # Decoder
     parser.add_argument('--num_blocks', help='Number of residual blocks in networks.', default=16, type=int)
     parser.add_argument('--num_residual_units', help='Number of residual units in networks.', default=24, type=int)
+    parser.add_argument('--seperate', help='seperate conv', default=False, type=int)
+    parser.add_argument('--bottleneck_type', help='inverted_bottle', default='inverted_bottle', type=str)
 
     #  clip weight
     parser.add_argument('--clip_range', help='weight clip range.', default=None, type=float)

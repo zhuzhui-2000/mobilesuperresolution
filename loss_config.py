@@ -1,8 +1,8 @@
 weight_sr_l1 = 1  # 0.8
 weight_speed = 0.1
 
-mobile_device='S21'
-compute_device='gpu'
+mobile_device='huawei_p30'
+compute_device='cpu'
 
 
 def update_weight(params):

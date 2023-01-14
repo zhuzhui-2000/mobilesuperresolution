@@ -61,11 +61,27 @@ class Model(nn.Module):
         x = x - self.image_mean
         x = self.body(x) + self.skip(x)
         x = self.shuf(x)
-        x = x + self.image_mean
+        # batch_size, channels, in_height, in_width = x.size()
+        
+        
+        
+        # channels = channels / (self.scale * self.scale)
+        # out = torch.split(x, self.scale * self.scale, dim=1)
+        # out = [torch.reshape(a,(batch_size,1,self.scale,self.scale,in_height,in_width)) for a in out]
+        # out = [torch.transpose(a,4,2) for a in out]
+        # out = [torch.transpose(a,4,3) for a in out]
+        # out = [torch.transpose(a,4,5) for a in out]
+        # out = [torch.reshape(a,(batch_size,1,self.scale*in_height,self.scale*in_width)) for a in out]
+        # out = torch.cat(out,1)
+
+        # out = out + self.image_mean
+
         return x
 
     def file_reader(self, filename):
+
         with open(filename, 'r') as f:
+
             status = eval(f.readlines()[-1].replace('\n', ''))[1]
         self.IN = status[0][0]
         print(status)
@@ -86,6 +102,9 @@ class Block(nn.Module):
 
         body.append(conv)
 
+        # conv = weight_norm(nn.Conv2d(M2, M2, 3, padding=3 // 2, groups=M2))
+        # body.append(conv)
+
         conv = weight_norm(nn.Conv2d(M2, IN, kernel_size, padding=kernel_size // 2))
         body.append(conv)
         self.body = nn.Sequential(*body)
@@ -96,16 +115,27 @@ class Block(nn.Module):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print('Usage: python export_onnx.py <scale> <block_index.txt file path> <output_name>')
+    if (len(sys.argv) != 4) and (len(sys.argv) != 5):
+        print('Usage: python export_onnx.py <scale> <block_index.txt file path> <output_name> (<model.pt>)')
         sys.exit(1)
     scale = eval(sys.argv[1])
     filename = sys.argv[2]
     output_name = sys.argv[3]
+    
     print(f'Create x{scale} SR model from {filename}')
     model = Model(scale=scale, filename=filename)
-
-    dummy_input = torch.rand([1, 3, 1280 // scale, 720 // scale])
+    
+    # print(type(net))
+    # print(len(net))
+    # for k in net.keys():
+    #     print(k)
+    # exit(0)
+    if len(sys.argv) == 5:
+        net = torch.load(sys.argv[4])
+        model.load_state_dict(net)
+    
+    
+    dummy_input = torch.rand([1, 3, 360, 540])
 
     torch.onnx.export(model, dummy_input, f'{output_name}.onnx', input_names=['LR'], output_names=['HR'],
                       opset_version=9)
