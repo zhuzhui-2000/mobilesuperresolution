@@ -6,8 +6,8 @@ import datasets._vsr
 LOCAL_DIR = '/data/zhuz/reds'
 TRAIN_LR_DIR = '/data/zhuz/sr/train/train_sharp_bicubic/X4'
 TRAIN_HR_DIR = '/data/zhuz/sr/train/train_sharp'
-EVAL_LR_DIR = '/data/zhuz/sr/train/train_sharp_bicubic/X4'
-EVAL_HR_DIR = '/data/zhuz/sr/train/train_sharp'
+EVAL_LR_DIR = '/data/zhuz/sr/test4/test_sharp_bicubic/X4'
+EVAL_HR_DIR = '/data/zhuz/sr/test4/test_sharp'
 
 
 def update_argparser(parser):

@@ -1,5 +1,5 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 # Experiments
 
@@ -44,8 +44,8 @@ printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 
 python  test_video_superresolution.py \
   --model_type $model_type \
-  --dataset reds \
-  --eval_datasets reds \
+  --dataset nemo \
+  --eval_datasets nemo \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
@@ -54,8 +54,8 @@ python  test_video_superresolution.py \
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --eval_model '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/single/weights/models.pt' \
-  --image_batch 100 \
+  --eval_model '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x4_16_24_Jan16_17_12_35/weights/models.pt' \
+  --image_batch 50 \
   --val_image_batch 100 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
   --job_dir runs/$job_dir

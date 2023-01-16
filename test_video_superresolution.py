@@ -219,7 +219,7 @@ def main(params, logging):
     # model = models.get_model(params=params)
     model_type = params.model_type
     if model_type == 'single':
-        model = Result_Model(scale=params.scale, filename=params.model_path)
+        model = Result_Model(scale=params.scale, channel=32,blocks=8,kernel=3)
     elif model_type == 'multi':
         model = Naive_model(scale=params.scale, filename=params.model_path,spynet_pretrained='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic':

@@ -45,7 +45,7 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                 hr = torch.stack([hr.squeeze(0), hr.squeeze(0), hr.squeeze(0)], 1)
                 lr = torch.stack([lr.squeeze(0), lr.squeeze(0), lr.squeeze(0)], 1)
 
-            output = model(lr).to('cpu')
+            output = model(lr,hr.shape[3],hr.shape[4]).to('cpu')
             print(output.shape,hr.shape,time.time()-t)
             lr = lr.to('cpu')
 
