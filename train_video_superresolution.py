@@ -76,12 +76,14 @@ def train(model,
 
         hr_label = hr.clone().detach().to(device, non_blocking=True)
         lr = lr.to(device, non_blocking=True)
+        
 
         total_batches = (epoch - 1) * nb + batch_idx
         
         # Train
         optimizer.zero_grad()
-        sr = model(lr)
+        sr = model(lr,hr.shape[3],hr.shape[4])
+        
         loss = 0
 
         loss_sr_l1 = params.weight_sr_l1 * criterions['l1'](sr, hr_label)
@@ -132,8 +134,13 @@ def evaluation(model, eval_data_loaders, epoch, writer, device):
             
             handle_dict = {'job_dir': writer.get_logdir(),
                            'epoch': epoch,
-                           'eval_data_name': eval_data_name, }
-            psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict)
+                           'eval_data_name': eval_data_name,
+                           'end_epoch':params.epochs }
+            if epoch % 10 ==0 and epoch>0:
+
+                psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=True)
+            else:
+                psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=False)
             writer.add_scalar(f"{eval_data_name}/PSNR", psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/bilinear_PSNR", bilinear_psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/PSNR_Y", psnr_y, epoch)
@@ -229,11 +236,11 @@ def main(params, logging):
     # model = models.get_model(params=params)
     model_type = params.model_type
     if model_type == 'single':
-        model = Result_Model(scale=params.scale, filename=params.model_path)
+        model = Result_Model(scale=params.scale, channel=32,blocks=8,kernel=3)
     elif model_type == 'multi':
         model = Naive_model(scale=params.scale, filename=params.model_path,spynet_pretrained='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic':
-        model = BasicVSR(num_feat=24, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+        model = BasicVSR(num_feat=16, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     else:
         raise Exception("未知模型")
     logging.info(f"\n{model}", is_print=False, device=device)
@@ -320,6 +327,12 @@ if __name__ == '__main__':
     parser.add_argument('--image_batch', default=10, type=int,
                         help=" ")
     parser.add_argument('--val_image_batch', default=100, type=int,
+                        help=" ")
+    parser.add_argument('--train_hr_width', default=256, type=int,
+                        help=" ")
+    parser.add_argument('--train_hr_height', default=256, type=int,
+                        help=" ")
+    parser.add_argument('--train_sample_patch', default=True, type=int,
                         help=" ")
 
     # evaluation

@@ -6,6 +6,7 @@ import numpy as np
 from common.metrics import psnr, psnr_y, ssim
 from torchvision.utils import save_image
 from torch.nn.functional import interpolate
+import time
 
 class L1_Charbonnier_loss(torch.nn.Module):
     """L1 Charbonnierloss."""
@@ -19,7 +20,7 @@ class L1_Charbonnier_loss(torch.nn.Module):
         loss = torch.mean(error)
         return loss
 
-def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.device, f: dict):
+def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.device, f: dict, save=True):
     # switch eval mode.
     model.eval()
     total_psnr_value = 0.
@@ -33,7 +34,9 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
     l=0
     with torch.no_grad():
         for i, (name, lr, hr) in enumerate(dataloader):
-
+            if f['epoch'] % 5 >0 and i>20:
+                break
+            t=time.time()
             if torch.cuda.is_available():
                 # hr = hr.to(gpu, non_blocking=True)
                 lr = lr.to(gpu, non_blocking=True)
@@ -43,13 +46,13 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                 lr = torch.stack([lr.squeeze(0), lr.squeeze(0), lr.squeeze(0)], 1)
 
             output = model(lr).to('cpu')
-            print(lr.shape,hr.shape)
+            print(output.shape,hr.shape,time.time()-t)
             lr = lr.to('cpu')
 
             if len(output) == 1 and output.dim()==5:
-
+                total+=output.shape[1]
                 for i in range(lr.shape[1]):
-                    total+=1
+                    
                     if len(output) == 1 and output.dim()==5:
                         
                         output_each = output[:,i,:,:,:]
@@ -66,20 +69,33 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                     os.makedirs(path, exist_ok=True)
                     path_bilinear = f"{f['job_dir']}/eval/bilinear"
                     os.makedirs(path_bilinear, exist_ok=True)
-                    save_image(sr.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path,name[0],i))
+                    
                     scale = model.scale if not hasattr(model, 'module') else model.module.scale
                     # The MSE Loss of the generated fake high-resolution image and real high-resolution image is calculated.
                     baseline = interpolate(lr_each,(hr_each.shape[2],hr_each.shape[3]),mode='bilinear')
-                    save_image(baseline.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_bilinear,name[0],i))
+                    
+                    if save:
+                        save_image(sr.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path,name[0],i))
+                        save_image(baseline.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_bilinear,name[0],i))
                     # path_bilinear = f"{f['job_dir']}/eval/bilinear"
                     # os.makedirs(path_bilinear, exist_ok=True)
                     # save_image(baseline.clamp(0, 1), f"{path_bilinear}/{name[0]}_{i}.png")
-                    total_biniliear_psnr += psnr(baseline,hr_each, shave=4)
-                    total_psnr_y_value += psnr_y(sr, hr_each, shave=4)
-                    total_psnr_value += psnr(sr, hr_each, shave=4)
-                    # The SSIM of the generated fake high-resolution image and real high-resolution image is calculated.
-                    total_ssim_value += ssim(sr, hr_each, shave=scale)
-                    total_biniliear_ssim += ssim(baseline, hr_each, shave=scale)
+                if len(output) == 2:
+                    sr, speed_accu = output
+                else:
+                    sr, speed_accu = output, None
+                lr = lr.squeeze()
+                hr = hr.squeeze()
+                sr = sr.squeeze()
+                baseline = interpolate(lr,(hr.shape[2],hr.shape[3]),mode='bilinear')
+                
+                total_biniliear_psnr += psnr(baseline,hr, shave=4)
+                total_psnr_y_value += psnr_y(sr, hr, shave=4)
+                total_psnr_value += psnr(sr, hr, shave=4)
+                # The SSIM of the generated fake high-resolution image and real high-resolution image is calculated.
+                # total_ssim_value += ssim(sr, hr, shave=scale)
+                # total_biniliear_ssim += ssim(baseline, hr, shave=scale)
+                
             else:
                 total+=lr.shape[0]
                 if len(output) == 2:
@@ -88,7 +104,8 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                     sr, speed_accu = output, None
                 path = f"{f['job_dir']}/eval/{f['eval_data_name']}"
                 os.makedirs(path, exist_ok=True)
-                save_image(sr.clamp(0, 1), f"{path}/{name[0]}.png")
+                if save:
+                    save_image(sr.clamp(0, 1), f"{path}/{name[0]}.png")
                 scale = model.scale if not hasattr(model, 'module') else model.module.scale
                 baseline = interpolate(lr,(hr.shape[2],hr.shape[3]),mode='bilinear', align_corners=True)
                 total_biniliear_psnr += psnr(baseline,hr, shave=scale + 6)

@@ -29,11 +29,11 @@ class BasicVSR(nn.Module):
         self.forward_trunk = ConvResidualBlocks(num_feat + 3, num_feat, num_block)
 
         # reconstruction
-        self.fusion = nn.Conv2d(num_feat * 2, num_feat , 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(num_feat * 2, num_feat * 2 , 1, 1, 0, bias=True)
         self.upconv1 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
         self.conv_hr = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
-        self.conv_last = nn.Conv2d(num_feat, 3, 3, 1, 1)
+        self.conv_last = nn.ConvTranspose2d(num_feat * 2,3,5,stride=self.scale)
 
 
         self.pixel_shuffle = nn.PixelShuffle(2)
@@ -52,7 +52,7 @@ class BasicVSR(nn.Module):
 
         return flows_forward, flows_backward
 
-    def forward(self, x):
+    def forward(self, x, height=1080, weight=1920):
         """Forward function of BasicVSR.
 
         Args:
@@ -89,12 +89,12 @@ class BasicVSR(nn.Module):
             # upsample
             out = torch.cat([out_l[i], feat_prop], dim=1)
             out = self.lrelu(self.fusion(out))
-            out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
-            out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
+            # out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
+            # out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
             out = self.conv_last(out)
             
-            
-            base = F.interpolate(x_i, scale_factor=4, mode='bilinear', align_corners=False)
+            out = nn.functional.interpolate(out,size=(height,weight),mode='bilinear')
+            base = F.interpolate(x_i,size=(height,weight), mode='bilinear', align_corners=False)
             out += base
             out_l[i] = out
         t3=time.time()

@@ -10,7 +10,7 @@ import time
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torch
-
+import cv2
 import common.modes
 import common.io
 from common.images import imresize
@@ -82,9 +82,9 @@ class VideoSuperResolutionDataset(data.Dataset):
                                             self.params.lr_patch_size + 1 - self.params.ignored_boundary_size)
         for (idx,(lr_image,hr_image)) in enumerate(zip(lr_image_list,hr_image_list)):
             if self.mode == common.modes.TRAIN:
-
-                # lr_image, hr_image = self._augment(lr_image, hr_image,p1,p2)
-                lr_image, hr_image = self._sample_patch(lr_image,hr_image,x,y)
+                if self.params.train_sample_patch:
+                    # lr_image, hr_image = self._augment(lr_image, hr_image,p1,p2)
+                    lr_image, hr_image = self._sample_patch(lr_image,hr_image,x,y)
             lr_image = np.ascontiguousarray(lr_image)
             hr_image = np.ascontiguousarray(hr_image)
             
@@ -211,6 +211,79 @@ class VideoSuperResolutionHdf5Dataset(VideoSuperResolutionDataset):
                         hr_image = np.asarray(Image.open(hr_file_path))
                         hr_image = np.ascontiguousarray(hr_image)          
                         self.hr_cache_file.add(hr_file_path, hr_image)
+                        print(hr_file_path, hr_image.shape)
+
+    def _load_item(self, index):
+
+
+        lr_image_list=[]
+        hr_image_list=[]
+        
+        for (lr_path,hr_path) in zip(self.lr_files[index],self.hr_files[index]):
+            
+            lr_image = self.lr_cache_file.get(lr_path)
+            hr_image = self.hr_cache_file.get(hr_path)
+
+
+            lr_image_list.append(lr_image)
+            hr_image_list.append(hr_image)
+
+            
+
+        return lr_image_list, hr_image_list
+
+class NemoHdf5Dataset(VideoSuperResolutionDataset):
+
+    def __init__(
+            self,
+            mode,
+            params,
+            lr_files,
+            hr_files,
+            lr_cache_file,
+            hr_cache_file,
+            lib_hdf5='h5py',
+    ):
+        super(NemoHdf5Dataset, self).__init__(
+            mode,
+            params,
+            lr_files,
+            hr_files,
+        )
+        self.lr_cache_file = common.io.Hdf5(lr_cache_file, lib_hdf5)
+        self.hr_cache_file = common.io.Hdf5(hr_cache_file, lib_hdf5)
+
+        cache_dir = os.path.dirname(lr_cache_file)
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+
+        if not os.path.exists(lr_cache_file):
+        # if 1==1:
+            lr_has_writen = []
+            for lr_files_batch in self.lr_files:
+                for lr_file_path in lr_files_batch:
+                    if lr_file_path in lr_has_writen:
+                        continue
+                    lr_image = np.fromfile(lr_file_path, dtype='uint8')
+                    
+                    lr_image = lr_image.reshape(240, 426 ,3)    
+                    lr_image = lr_image[:, :,[2, 1,0]]  
+                    self.lr_cache_file.add(lr_file_path, lr_image)
+                    lr_has_writen.append(lr_file_path)
+                    print(lr_file_path, lr_image.shape)
+        if self.mode != common.modes.PREDICT:
+            if not os.path.exists(hr_cache_file):
+            #if 1==1:
+                hr_has_writen = []
+                for hr_files_batch in self.hr_files:
+                    for hr_file_path in hr_files_batch:
+                        if hr_file_path in hr_has_writen:
+                            continue
+                        hr_image = np.fromfile(hr_file_path, dtype='uint8')
+                        
+                        hr_image = hr_image.reshape(1080, 1920 ,3)          
+                        self.hr_cache_file.add(hr_file_path, hr_image)
+                        hr_has_writen.append(hr_file_path)
                         print(hr_file_path, hr_image.shape)
 
     def _load_item(self, index):

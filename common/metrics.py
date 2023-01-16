@@ -16,7 +16,7 @@ def psnr(sr, hr, shave=4):
         diff = diff[..., shave:-shave, shave:-shave]
     mse = diff.pow(2).mean([-3, -2, -1])
     psnr = -10 * mse.log10()
-    return psnr.mean()
+    return psnr.sum()
 
 
 def psnr_y(sr, hr, shave=4):
@@ -35,7 +35,7 @@ def psnr_y(sr, hr, shave=4):
     mse = diff.pow(2).mean([-3, -2, -1])
     psnr = -10 * mse.log10()
     
-    return psnr.mean()
+    return psnr.sum()
 
 
 def ssim(X, Y, shave=4):

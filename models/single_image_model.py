@@ -19,7 +19,7 @@ import random
 warnings.simplefilter("ignore", UserWarning)
 class Result_Model(nn.Module):
 
-    def __init__(self, scale, channel=48,blocks=7, kernel=3, weight=1920, height=1080):
+    def __init__(self, scale, channel=48,blocks=7, kernel=3):
         super(Result_Model, self).__init__()
 
         self.image_mean = 0.5
@@ -29,19 +29,19 @@ class Result_Model(nn.Module):
         num_inputs = 3
         self.scale = scale
         self.IN = channel
-        self.weight = weight
-        self.height = height
+
         num_outputs = scale * scale * num_inputs
 
-        body = []
-        conv = weight_norm(
+        
+        
+        self.encoder = weight_norm(
             nn.Conv2d(
                 num_inputs,
                 self.IN,
                 kernel_size,
                 padding=kernel_size // 2))
-        body.append(conv)
-
+        
+        body = []
         for block in range(blocks):
             body.append(Block(
                 IN=channel,
@@ -70,7 +70,7 @@ class Result_Model(nn.Module):
         self.skip = conv
 
         shuf = []
-
+        
         shuf.append(nn.ConvTranspose2d(channel,3,5,stride=scale))
 
 
@@ -88,18 +88,24 @@ class Result_Model(nn.Module):
         self.img_upsample = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=False)
         
 
-    def forward(self, x):
+    def forward(self, x, height=1080,weight=1920):
         
-        B, C, H, W = x.shape
+        B, N, C, H, W = x.shape
+        out_list=[]
+        for i in range(N):
+            x_in = x[:,i,:,:,:]
+            x_ = self.encoder(x_in)
+            # base = nn.functional.interpolate(x_in, scale_factor=4, mode='bilinear', align_corners=False)
+            # x_in = x_ - self.image_mean
+            x_ = self.body(x_) + x_
+            x_ = self.shuf(x_) 
+            
+            x_ = nn.functional.interpolate(x_,size=(height,weight),mode='bilinear')
+            
+            out_list.append(x_)
+        out = torch.stack(out_list,dim=1)
 
-        x_in = x
-        # base = nn.functional.interpolate(x_in, scale_factor=4, mode='bilinear', align_corners=False)
-        # x_in = x_ - self.image_mean
-        x_ = self.body(x_in) + x
-        x_ = self.shuf(x_) 
-        x_ = nn.functional.interpolate(x_,size=(self.weight,self.height),mode='bilinear')
-        
-        return x_
+        return out
 
 
 class Block(nn.Module):

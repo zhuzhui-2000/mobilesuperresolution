@@ -4,10 +4,10 @@ import common.modes
 import datasets._vsr
 
 LOCAL_DIR = '/data/zhuz/reds'
-TRAIN_LR_DIR = '/data/zhuz/sr/train/train_sharp_bicubic/X4'
-TRAIN_HR_DIR = '/data/zhuz/sr/train/train_sharp'
-EVAL_LR_DIR = '/data/zhuz/sr/train/train_sharp_bicubic/X4'
-EVAL_HR_DIR = '/data/zhuz/sr/train/train_sharp'
+TRAIN_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/1/image/240p_512kbps_s0_d300.webm'
+TRAIN_HR_DIR = '/data/zhuz/nemo/1'
+EVAL_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/1/image/240p_512kbps_s0_d300.webm'
+EVAL_HR_DIR = '/data/zhuz/nemo/1'
 
 
 def update_argparser(parser):
@@ -60,7 +60,7 @@ def get_dataset(mode, params):
 #         )
 
 
-class REDS_(datasets._vsr.VideoSuperResolutionDataset):
+class REDS_(datasets._vsr.NemoHdf5Dataset):
 
     def __init__(self, mode, params):
 
@@ -89,12 +89,12 @@ class REDS_(datasets._vsr.VideoSuperResolutionDataset):
         )
 
 
-class REDS(datasets._vsr.VideoSuperResolutionHdf5Dataset):
+class REDS(datasets._vsr.NemoHdf5Dataset):
 
     def __init__(self, mode, params):
 
-        lr_cache_file = 'data/cache/reds_{}_lr_x{}.h5'.format(mode, params.scale)
-        hr_cache_file = 'data/cache/reds_{}_hr.h5'.format(mode)
+        lr_cache_file = 'data/cache/nemo_{}_lr_x{}.h5'.format('train', params.scale)
+        hr_cache_file = 'data/cache/nemo_{}_hr.h5'.format('train')
 
         lr_dir = {
             common.modes.TRAIN: TRAIN_LR_DIR,
@@ -110,11 +110,11 @@ class REDS(datasets._vsr.VideoSuperResolutionHdf5Dataset):
             image_iter = params.val_image_batch
 
 
-        lr_files = list_image_files(lr_dir,image_iter)
+        lr_files = list_image_files(lr_dir,mode,image_iter)
         if mode == common.modes.PREDICT:
             hr_files = lr_files
         else:
-            hr_files = list_image_files(hr_dir,image_iter)
+            hr_files = list_image_files(hr_dir,mode,image_iter)
 
         super(REDS, self).__init__(
             mode,
@@ -125,14 +125,17 @@ class REDS(datasets._vsr.VideoSuperResolutionHdf5Dataset):
             hr_cache_file,
         )
 
-def list_image_files(d, image_batch=10):
+def list_image_files(d,mode, image_batch=10):
     files = sorted(os.listdir(d))
+    files = [os.path.join(d,f) for f in files if "_" not in f]
+    file_num = len(files)
+    
     files_lists_ = []
-    for image_files in files:
-        image_dir = os.path.join(d, image_files)
-        image_list = sorted(os.listdir(image_dir))
-        image_list_2 =  [os.path.join(image_dir, f) for f in image_list]
-        for batch in range(0,101-image_batch):
-            files_lists_.append(image_list_2[batch:batch+image_batch])
+    if mode == common.modes.TRAIN:
+        for batch in range(0,file_num+1-image_batch):
+            files_lists_.append(files[batch:batch+image_batch])
+    else:
+        for batch in range(0,file_num+1-image_batch,image_batch):
+            files_lists_.append(files[batch:batch+image_batch])
     
     return files_lists_
