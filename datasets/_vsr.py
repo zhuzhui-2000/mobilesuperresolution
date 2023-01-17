@@ -232,6 +232,81 @@ class VideoSuperResolutionHdf5Dataset(VideoSuperResolutionDataset):
 
         return lr_image_list, hr_image_list
 
+class VideoSuperResolutionWithMVHdf5Dataset(VideoSuperResolutionDataset):
+
+    def __init__(
+            self,
+            mode,
+            params,
+            lr_files,
+            hr_files,
+            lr_cache_file,
+            hr_cache_file,
+            mv_cache_file,
+            lib_hdf5='h5py',
+    ):
+        super(VideoSuperResolutionWithMVHdf5Dataset, self).__init__(
+            mode,
+            params,
+            lr_files,
+            hr_files,
+        )
+        self.lr_cache_file = common.io.Hdf5(lr_cache_file, lib_hdf5)
+        self.hr_cache_file = common.io.Hdf5(hr_cache_file, lib_hdf5)
+        self.mv_cache_file = common.io.Hdf5(mv_cache_file, lib_hdf5)
+
+        cache_dir = os.path.dirname(lr_cache_file)
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+
+        if not os.path.exists(lr_cache_file):
+        # if 1==1:
+            for lr_files_batch in self.lr_files:
+                for lr_file_path in lr_files_batch:
+                    lr_image = np.asarray(Image.open(lr_file_path))
+                    lr_image = np.ascontiguousarray(lr_image)          
+                    self.lr_cache_file.add(lr_file_path, lr_image)
+                    print(lr_file_path, lr_image.shape)
+        if not os.path.exists(mv_cache_file):
+        # if 1==1:
+            for lr_files_batch in self.lr_files:
+                for lr_file_path in lr_files_batch:
+                    file , frame = os.path.split(lr_file_path)
+                    frame = int(frame.split(".")[0])
+                    mv_npy = np.load(os.path.join(file,'hex-me16-ref1/motion.npy'))
+
+
+                    self.mv_cache_file.add(lr_file_path, mv_npy[frame,:,:,:])
+                    print(lr_file_path, mv_npy.shape)
+        if self.mode != common.modes.PREDICT:
+            if not os.path.exists(hr_cache_file):
+            #if 1==1:
+                for hr_files_batch in self.hr_files:
+                    for hr_file_path in hr_files_batch:
+                        hr_image = np.asarray(Image.open(hr_file_path))
+                        hr_image = np.ascontiguousarray(hr_image)          
+                        self.hr_cache_file.add(hr_file_path, hr_image)
+                        print(hr_file_path, hr_image.shape)
+
+    def _load_item(self, index):
+
+
+        lr_image_list=[]
+        hr_image_list=[]
+        
+        for (lr_path,hr_path) in zip(self.lr_files[index],self.hr_files[index]):
+            
+            lr_image = self.lr_cache_file.get(lr_path)
+            hr_image = self.hr_cache_file.get(hr_path)
+
+
+            lr_image_list.append(lr_image)
+            hr_image_list.append(hr_image)
+
+            
+
+        return lr_image_list, hr_image_list
+
 class NemoHdf5Dataset(VideoSuperResolutionDataset):
 
     def __init__(
@@ -287,24 +362,125 @@ class NemoHdf5Dataset(VideoSuperResolutionDataset):
                         hr_has_writen.append(hr_file_path)
                         print(hr_file_path, hr_image.shape)
 
+    def __getitem__(self, index):
+        
+        if self.mode == common.modes.PREDICT:
+            lr_image = np.asarray(Image.open(self.lr_files[index][1]))
+            lr_image = transforms.functional.to_tensor(lr_image)
+            return lr_image, self.hr_files[index][0]
+
+        if self.mode == common.modes.TRAIN:
+            index = index // self.params.num_patches
+        
+        lr_image_list, hr_image_list, mv_list = self._load_item(index) #numpy list
+        lr_image_list_ = []
+        hr_image_list_ = []
+        mv_list_ = []
+        # lr_image, hr_image = self._sample_patch(lr_image, hr_image)
+        
+        p1 = random.random()
+        p2 = random.random()
+
+        x = random.randrange(
+            self.params.ignored_boundary_size, lr_image_list[0].shape[0] -
+                                            self.params.lr_patch_size + 1 - self.params.ignored_boundary_size)
+        y = random.randrange(
+            self.params.ignored_boundary_size, lr_image_list[0].shape[1] -
+                                            self.params.lr_patch_size + 1 - self.params.ignored_boundary_size)
+        for (idx,(lr_image,hr_image,mv)) in enumerate(zip(lr_image_list,hr_image_list, mv_list)):
+            if self.mode == common.modes.TRAIN:
+                if self.params.train_sample_patch:
+                    # lr_image, hr_image = self._augment(lr_image, hr_image,p1,p2)
+                    lr_image, hr_image,mv = self._sample_patch(lr_image,hr_image,mv,x,y)
+            lr_image = np.ascontiguousarray(lr_image)
+            hr_image = np.ascontiguousarray(hr_image)
+            mv = np.ascontiguousarray(mv)
+            
+            lr_image = transforms.functional.to_tensor(lr_image)
+            hr_image = transforms.functional.to_tensor(hr_image)
+            mv = torch.from_numpy(mv).permute(2,0,1)
+            
+            lr_image_list_.append(lr_image)
+            hr_image_list_.append(hr_image)
+            mv_list_.append(mv)
+        lr_image = torch.stack(lr_image_list_)
+        hr_image = torch.stack(hr_image_list_)
+        mv = torch.stack(mv_list_)
+        if self.mode == common.modes.TRAIN:
+            lr_image, hr_image, mv = self._augment(lr_image, hr_image, mv,p1,p2)
+        # print(lr_image.shape,hr_image.shape)
+
+
+        
+        if self.mode == common.modes.TRAIN:
+            return [lr_image, mv], hr_image
+        elif self.mode == common.modes.EVAL:
+
+            p=str.split(os.path.splitext(self.lr_files[index][0])[0],"/")
+            save_path = p[-2]+p[-1]
+            # save_path = os.path.splitext(self.lr_files[index][0])[-2]+'_'+os.path.splitext(self.lr_files[index][0])[-1]
+            return save_path, [lr_image, mv], hr_image
+
     def _load_item(self, index):
 
 
-        lr_image_list=[]
-        hr_image_list=[]
+        lr_image_list = []
+        hr_image_list = []
+        mv_list = []
         
         for (lr_path,hr_path) in zip(self.lr_files[index],self.hr_files[index]):
             
             lr_image = self.lr_cache_file.get(lr_path)
             hr_image = self.hr_cache_file.get(hr_path)
+            mv = self.mv_cache_file.get(lr_path)
             
 
             lr_image_list.append(lr_image)
             hr_image_list.append(hr_image)
+            mv_list.append(mv)
 
             
 
-        return lr_image_list, hr_image_list
+        return lr_image_list, hr_image_list, mv_list
+
+    def _sample_patch(self, lr_image, hr_image,mv,x,y):
+        
+        if self.mode == common.modes.TRAIN:
+            # sample patch while training
+
+            lr_image = lr_image[x:x + self.params.lr_patch_size, y:y +
+                                                                   self.params.lr_patch_size,:]
+            mv = mv[x:x + self.params.lr_patch_size, y:y +
+                                                                   self.params.lr_patch_size,:]                                                      
+            hr_image = hr_image[x *
+                                self.params.scale:(x + self.params.lr_patch_size) *
+                                                  self.params.scale, y *
+                                                                     self.params.scale:(y + self.params.lr_patch_size) *
+                                                                                       self.params.scale,:]
+        # else:
+        #     hr_image = hr_image[:lr_image.shape[2] *
+        #                          self.params.scale, :lr_image.shape[3] *
+        #                                              self.params.scale]
+        return lr_image, hr_image, mv
+
+    def _augment(self, lr_image, hr_image, mv,p1,p2):
+
+        if self.mode == common.modes.TRAIN:
+            
+            for idx in range(lr_image.shape[0]):
+            # augmentation while training
+                if p1 < 0.5:
+                    lr_image[idx,:,:,:] = transforms.RandomHorizontalFlip(p=1)(lr_image[idx,:,:,:])
+                    hr_image[idx,:,:,:] = transforms.RandomHorizontalFlip(p=1)(hr_image[idx,:,:,:])
+                    mv[idx,:,:,:] = transforms.RandomHorizontalFlip(p=1)(mv[idx,:,:,:])
+                if p2 < 0.5:
+                    lr_image[idx,:,:,:] = transforms.RandomVerticalFlip(p=1)(lr_image[idx,:,:,:])
+                    hr_image[idx,:,:,:] = transforms.RandomVerticalFlip(p=1)(hr_image[idx,:,:,:])
+                    mv[idx,:,:,:] = transforms.RandomVerticalFlip(p=1)(mv[idx,:,:,:])
+            # if random.random() < 0.5:
+            #     lr_image = np.swapaxes(lr_image, 0, 1)
+            #     hr_image = np.swapaxes(hr_image, 0, 1)
+        return lr_image, hr_image, mv
 
 
 

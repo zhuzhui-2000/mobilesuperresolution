@@ -60,7 +60,7 @@ def get_dataset(mode, params):
 #         )
 
 
-class REDS_(datasets._vsr.VideoSuperResolutionDataset):
+class REDS_(datasets._vsr.VideoSuperResolutionWithMVHdf5Dataset):
 
     def __init__(self, mode, params):
 
@@ -89,12 +89,13 @@ class REDS_(datasets._vsr.VideoSuperResolutionDataset):
         )
 
 
-class REDS(datasets._vsr.VideoSuperResolutionHdf5Dataset):
+class REDS(datasets._vsr.VideoSuperResolutionWithMVHdf5Dataset):
 
     def __init__(self, mode, params):
 
         lr_cache_file = 'data/cache/reds_{}_lr_x{}.h5'.format(mode, params.scale)
         hr_cache_file = 'data/cache/reds_{}_hr.h5'.format(mode)
+        mv_cache_file = 'data/cache/reds_{}_mv.h5'.format(mode)
 
         lr_dir = {
             common.modes.TRAIN: TRAIN_LR_DIR,
@@ -123,6 +124,7 @@ class REDS(datasets._vsr.VideoSuperResolutionHdf5Dataset):
             hr_files,
             lr_cache_file,
             hr_cache_file,
+            mv_cache_file,
         )
 
 def list_image_files(d, image_batch=10):

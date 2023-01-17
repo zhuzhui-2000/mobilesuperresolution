@@ -29,6 +29,7 @@ import random
 from models.single_image_model import Result_Model
 from models.naive_multi_model_easy import Naive_model
 from models.basicvsr_arch import BasicVSR
+from models.mvvsr_arch import MotionVectorVSR
 
 
 def setup_seed(seed):
@@ -241,6 +242,8 @@ def main(params, logging):
         model = Naive_model(scale=params.scale, filename=params.model_path,spynet_pretrained='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic':
         model = BasicVSR(num_feat=16, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+    elif model_type == 'basic_mv':
+        model = MotionVectorVSR(num_feat=16, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     else:
         raise Exception("未知模型")
     logging.info(f"\n{model}", is_print=False, device=device)

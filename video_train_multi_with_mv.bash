@@ -1,9 +1,9 @@
 #!/bin/bash
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # Experiments
 
-model_type='basic'  # NAS_MODEL / BASIC_MODEL
+model_type='basic_mv'  # NAS_MODEL / BASIC_MODEL
 
 epochs=50
 num_patches=2   # default 1000
@@ -44,8 +44,8 @@ printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 
 python  train_video_superresolution.py \
   --model_type $model_type \
-  --dataset reds \
-  --eval_datasets reds \
+  --dataset reds_with_mv \
+  --eval_datasets reds_with_mv \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
@@ -54,7 +54,7 @@ python  train_video_superresolution.py \
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --image_batch 15 \
+  --image_batch 1 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
   --job_dir runs/$job_dir
 

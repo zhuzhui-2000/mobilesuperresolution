@@ -3,11 +3,12 @@ from torch import nn as nn
 from torch.nn import functional as F
 import time
 from mmedit.models.common import PixelShufflePack, flow_warp
+
 from mmedit.models.backbones.sr_backbones.basicvsr_net import (
     ResidualBlocksWithInputConv, SPyNet)
 # from models.spynet_arch import SpyNet
 
-class MVVSR(nn.Module):
+class MotionVectorVSR(nn.Module):
     """A recurrent network for video SR. Now only x4 is supported.
 
     Args:
@@ -22,19 +23,18 @@ class MVVSR(nn.Module):
 
         # alignment
         self.spynet = SPyNet(pretrained=spynet_path)
-        for m in self.spynet.parameters():
-            m.requires_grad=False
+        
         self.scale=4
         # propagation
         self.backward_trunk = ConvResidualBlocks(num_feat + 3, num_feat, num_block)
         self.forward_trunk = ConvResidualBlocks(num_feat + 3, num_feat, num_block)
 
         # reconstruction
-        self.fusion = nn.Conv2d(num_feat * 2, num_feat , 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(num_feat * 2, num_feat * 2 , 1, 1, 0, bias=True)
         self.upconv1 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
         self.conv_hr = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
-        self.conv_last = nn.Conv2d(num_feat, 3, 3, 1, 1)
+        self.conv_last = nn.ConvTranspose2d(num_feat * 2,3,5,stride=self.scale)
 
 
         self.pixel_shuffle = nn.PixelShuffle(2)
@@ -53,14 +53,19 @@ class MVVSR(nn.Module):
 
         return flows_forward, flows_backward
 
-    def forward(self, x):
+    def forward(self, x_, height=1080, weight=1920):
         """Forward function of BasicVSR.
 
         Args:
             x: Input frames with shape (b, n, c, h, w). n is the temporal dimension / number of frames.
+            mv: shape(b, n, 2, h, w)
         """
+        x = x_[0]
+        mv = x_[1]
         t1=time.time()
-        flows_forward, flows_backward = self.get_flow(x)
+        flows_forward = mv[:,1:,:,:]
+        flows_backward = flows_forward * (-1)
+        
         t2=time.time()
         b, n, _, h, w = x.size()
         
@@ -90,16 +95,16 @@ class MVVSR(nn.Module):
             # upsample
             out = torch.cat([out_l[i], feat_prop], dim=1)
             out = self.lrelu(self.fusion(out))
-            out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
-            out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
+            # out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
+            # out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
             out = self.conv_last(out)
             
-            
-            base = F.interpolate(x_i, scale_factor=4, mode='bilinear', align_corners=False)
+            out = nn.functional.interpolate(out,size=(height,weight),mode='bilinear')
+            base = F.interpolate(x_i,size=(height,weight), mode='bilinear', align_corners=False)
             out += base
             out_l[i] = out
         t3=time.time()
-        print((t3-t2)/n,(t2-t1)/n)
+        # print((t3-t2)/n,(t2-t1)/n)
         
         return torch.stack(out_l, dim=1)
 
