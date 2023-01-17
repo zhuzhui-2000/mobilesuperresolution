@@ -4,10 +4,10 @@ import common.modes
 import datasets._vsr
 
 LOCAL_DIR = '/data/zhuz/reds'
-TRAIN_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/1/image/240p_512kbps_s0_d300.webm'
-TRAIN_HR_DIR = '/data/zhuz/nemo/1'
-EVAL_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/1/image/240p_512kbps_s0_d300.webm'
-EVAL_HR_DIR = '/data/zhuz/nemo/1'
+TRAIN_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/2/image/240p_512kbps_s0_d300.webm'
+TRAIN_HR_DIR = '/data/zhuz/nemo/2'
+EVAL_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/2/image/240p_512kbps_s0_d300.webm'
+EVAL_HR_DIR = '/data/zhuz/nemo/2'
 
 
 def update_argparser(parser):

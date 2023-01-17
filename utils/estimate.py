@@ -69,6 +69,9 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                     os.makedirs(path, exist_ok=True)
                     path_bilinear = f"{f['job_dir']}/eval/bilinear"
                     os.makedirs(path_bilinear, exist_ok=True)
+                    path_hr = f"{f['job_dir']}/eval/hr"
+                    os.makedirs(path_hr, exist_ok=True)
+
                     
                     scale = model.scale if not hasattr(model, 'module') else model.module.scale
                     # The MSE Loss of the generated fake high-resolution image and real high-resolution image is calculated.
@@ -77,6 +80,7 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                     if save:
                         save_image(sr.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path,name[0],i))
                         save_image(baseline.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_bilinear,name[0],i))
+                        save_image(hr_each.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_hr,name[0],i))
                     # path_bilinear = f"{f['job_dir']}/eval/bilinear"
                     # os.makedirs(path_bilinear, exist_ok=True)
                     # save_image(baseline.clamp(0, 1), f"{path_bilinear}/{name[0]}_{i}.png")
@@ -93,8 +97,8 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                 total_psnr_y_value += psnr_y(sr, hr, shave=4)
                 total_psnr_value += psnr(sr, hr, shave=4)
                 # The SSIM of the generated fake high-resolution image and real high-resolution image is calculated.
-                # total_ssim_value += ssim(sr, hr, shave=scale)
-                # total_biniliear_ssim += ssim(baseline, hr, shave=scale)
+                total_ssim_value += ssim(sr, hr, shave=scale)
+                total_biniliear_ssim += ssim(baseline, hr, shave=scale)
                 
             else:
                 total+=lr.shape[0]

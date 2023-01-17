@@ -267,7 +267,7 @@ class NemoHdf5Dataset(VideoSuperResolutionDataset):
                     lr_image = np.fromfile(lr_file_path, dtype='uint8')
                     
                     lr_image = lr_image.reshape(240, 426 ,3)    
-                    lr_image = lr_image[:, :,[2, 1,0]]  
+                    
                     self.lr_cache_file.add(lr_file_path, lr_image)
                     lr_has_writen.append(lr_file_path)
                     print(lr_file_path, lr_image.shape)
@@ -281,7 +281,8 @@ class NemoHdf5Dataset(VideoSuperResolutionDataset):
                             continue
                         hr_image = np.fromfile(hr_file_path, dtype='uint8')
                         
-                        hr_image = hr_image.reshape(1080, 1920 ,3)          
+                        hr_image = hr_image.reshape(1080, 1920 ,3)   
+                        hr_image = hr_image[:, :,[2, 1,0]]         
                         self.hr_cache_file.add(hr_file_path, hr_image)
                         hr_has_writen.append(hr_file_path)
                         print(hr_file_path, hr_image.shape)

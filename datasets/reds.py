@@ -131,7 +131,7 @@ def list_image_files(d, image_batch=10):
     for image_files in files:
         image_dir = os.path.join(d, image_files)
         image_list = sorted(os.listdir(image_dir))
-        image_list_2 =  [os.path.join(image_dir, f) for f in image_list]
+        image_list_2 =  [os.path.join(image_dir, f) for f in image_list if f.endswith('.png')]
         for batch in range(0,101-image_batch):
             files_lists_.append(image_list_2[batch:batch+image_batch])
     

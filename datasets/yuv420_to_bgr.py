@@ -21,7 +21,7 @@ def sr_convert_yuv_to_rgb(yuv_dir,raw_dir,index: int, height=1080, width=1920):
     # np.fromfile("{}.raw".format(index), dtype=np.uint8).reshape(height, width, 3)
 
 if __name__ == "__main__":
-    video_idx = 1
+    video_idx = 2
     
     nemo_dir = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset'
     yuv_dir = nemo_dir +'/' + str(video_idx)+'/image/2160p_12000kbps_s0_d300.webm'

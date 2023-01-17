@@ -56,7 +56,7 @@ python  test_video_superresolution.py \
   --epochs $epochs \
   --eval_model '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x4_16_24_Jan16_17_12_35/weights/models.pt' \
   --image_batch 50 \
-  --val_image_batch 100 \
+  --val_image_batch 50 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
   --job_dir runs/$job_dir
 
