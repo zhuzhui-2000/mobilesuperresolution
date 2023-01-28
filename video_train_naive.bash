@@ -56,5 +56,5 @@ python  train_video_superresolution.py \
   --epochs $epochs \
   --image_batch 20 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
-  --job_dir runs/$job_dir
+  --job_dir /data/zhuz/runs/$job_dir
 

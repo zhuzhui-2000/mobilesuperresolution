@@ -6,8 +6,8 @@ export CUDA_VISIBLE_DEVICES=0
 model_type='basic_mv'  # NAS_MODEL / BASIC_MODEL
 
 epochs=50
-num_patches=2   # default 1000
-train_batch_size=8 # default 16
+num_patches=3   # default 1000
+train_batch_size=16 # default 16
 lr_patch_size=64    # default 48
 
 # arch
@@ -49,12 +49,12 @@ python  train_video_superresolution.py \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
-  --learning_rate 0.00025 \
+  --learning_rate 0.00020 \
   --train_batch_size $train_batch_size \
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --image_batch 1 \
+  --image_batch 20 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
-  --job_dir runs/$job_dir
+  --job_dir /data/zhuz/runs/$job_dir
 

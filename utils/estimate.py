@@ -34,26 +34,28 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
     l=0
     with torch.no_grad():
         for i, (name, lr, hr) in enumerate(dataloader):
-            if f['epoch'] % 5 >0 and i>20:
-                break
+            # if i>20:
+            #     break
             t=time.time()
+            
             if torch.cuda.is_available():
                 # hr = hr.to(gpu, non_blocking=True)
                 lr = lr.to(gpu, non_blocking=True)
-            if hr.shape[1] == 1:
-                # gray scale to 3 channel
-                hr = torch.stack([hr.squeeze(0), hr.squeeze(0), hr.squeeze(0)], 1)
-                lr = torch.stack([lr.squeeze(0), lr.squeeze(0), lr.squeeze(0)], 1)
+            # if hr.shape[1] == 1:
+            #     # gray scale to 3 channel
+            #     hr = torch.stack([hr.squeeze(0), hr.squeeze(0), hr.squeeze(0)], 1)
+            #     lr = torch.stack([lr.squeeze(0), lr.squeeze(0), lr.squeeze(0)], 1)
 
             output = model(lr,hr.shape[3],hr.shape[4]).to('cpu')
             print(output.shape,hr.shape,time.time()-t)
             lr = lr.to('cpu')
 
-            if len(output) == 1 and output.dim()==5:
+            if len(output) == 1 and output.dim()==5 :
                 total+=output.shape[1]
-                for i in range(lr.shape[1]):
-                    
-                    if len(output) == 1 and output.dim()==5:
+                for i in range(hr.shape[1]):
+                    if not save:
+                        break
+                    if len(output) == 1 and output.dim()==5 :
                         
                         output_each = output[:,i,:,:,:]
                         lr_each = lr[:,i,:,:,:]
@@ -76,11 +78,12 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                     scale = model.scale if not hasattr(model, 'module') else model.module.scale
                     # The MSE Loss of the generated fake high-resolution image and real high-resolution image is calculated.
                     baseline = interpolate(lr_each,(hr_each.shape[2],hr_each.shape[3]),mode='bilinear')
+                    if baseline.shape[1]!=3:
+                        baseline = baseline[:,:3,:,:]
                     
-                    if save:
-                        save_image(sr.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path,name[0],i))
-                        save_image(baseline.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_bilinear,name[0],i))
-                        save_image(hr_each.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_hr,name[0],i))
+                    save_image(sr.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path,name[0],i))
+                    save_image(baseline.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_bilinear,name[0],i))
+                    save_image(hr_each.clamp(0, 1), "{0}/{1}{2:0>3d}.png".format(path_hr,name[0],i))
                     # path_bilinear = f"{f['job_dir']}/eval/bilinear"
                     # os.makedirs(path_bilinear, exist_ok=True)
                     # save_image(baseline.clamp(0, 1), f"{path_bilinear}/{name[0]}_{i}.png")
@@ -91,14 +94,19 @@ def test(dataloader: torch.utils.data.DataLoader, model: nn.Module, gpu: torch.d
                 lr = lr.squeeze()
                 hr = hr.squeeze()
                 sr = sr.squeeze()
+                
                 baseline = interpolate(lr,(hr.shape[2],hr.shape[3]),mode='bilinear')
+                if baseline.shape[1]!=3:
+                    baseline = baseline[:,:3,:,:]
                 
                 total_biniliear_psnr += psnr(baseline,hr, shave=4)
                 total_psnr_y_value += psnr_y(sr, hr, shave=4)
-                total_psnr_value += psnr(sr, hr, shave=4)
+                p = psnr(sr, hr, shave=4)
+                print(p/output.shape[1])
+                total_psnr_value += p
                 # The SSIM of the generated fake high-resolution image and real high-resolution image is calculated.
-                total_ssim_value += ssim(sr, hr, shave=scale)
-                total_biniliear_ssim += ssim(baseline, hr, shave=scale)
+                # total_ssim_value += ssim(sr, hr, shave=scale)
+                # total_biniliear_ssim += ssim(baseline, hr, shave=scale)
                 
             else:
                 total+=lr.shape[0]

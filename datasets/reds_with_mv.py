@@ -129,7 +129,10 @@ class REDS(datasets._vsr.VideoSuperResolutionWithMVHdf5Dataset):
 
 def list_image_files(d, image_batch=10):
     files = sorted(os.listdir(d))
+    files = [f for f in files if f!='153']
     files_lists_ = []
+
+
     for image_files in files:
         image_dir = os.path.join(d, image_files)
         image_list = sorted(os.listdir(image_dir))

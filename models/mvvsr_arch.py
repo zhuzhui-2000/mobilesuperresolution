@@ -60,8 +60,8 @@ class MotionVectorVSR(nn.Module):
             x: Input frames with shape (b, n, c, h, w). n is the temporal dimension / number of frames.
             mv: shape(b, n, 2, h, w)
         """
-        x = x_[0]
-        mv = x_[1]
+        x = x_[:,:,:3,:,:]
+        mv = x_[:,:,3:,:,:]
         t1=time.time()
         flows_forward = mv[:,1:,:,:]
         flows_backward = flows_forward * (-1)

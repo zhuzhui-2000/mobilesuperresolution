@@ -58,4 +58,4 @@ python  test_video_superresolution_by_patch.py \
   --image_batch 100 \
   --val_image_batch 100 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
-  --job_dir runs/$job_dir
+  --job_dir /data/zhuz/runs/$job_dir

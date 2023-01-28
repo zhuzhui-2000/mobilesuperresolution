@@ -2,7 +2,7 @@ import warnings
 import argparse
 import importlib
 import os
-
+import csv
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -74,8 +74,9 @@ def train(model,
     losses = {}
 
     for batch_idx, (lr, hr) in enumerate(train_data_loader):
-
+        
         hr_label = hr.clone().detach().to(device, non_blocking=True)
+        
         lr = lr.to(device, non_blocking=True)
         
 
@@ -137,11 +138,9 @@ def evaluation(model, eval_data_loaders, epoch, writer, device):
                            'epoch': epoch,
                            'eval_data_name': eval_data_name,
                            'end_epoch':params.epochs }
-            if epoch % 10 ==0 and epoch>0:
-
-                psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=True)
-            else:
-                psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=False)
+            psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=params.save)
+            # else:
+            #     psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict, save=False)
             writer.add_scalar(f"{eval_data_name}/PSNR", psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/bilinear_PSNR", bilinear_psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/PSNR_Y", psnr_y, epoch)
@@ -197,6 +196,10 @@ def main(params, logging):
     # Load train datasetcd
     train_dataset = dataset_module.get_dataset(common.modes.TRAIN, params)
 
+
+    
+
+
     # Load eval dataset
     if params.eval_datasets:
         eval_datasets = []
@@ -205,6 +208,8 @@ def main(params, logging):
             eval_datasets.append((eval_dataset, eval_dataset_module.get_dataset(common.modes.EVAL, params)))
     else:
         eval_datasets = [(params.dataset, dataset_module.get_dataset(common.modes.EVAL, params))]
+
+
 
     # Dataloader sampler set to None for single GPU
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) if params.distributed else None
@@ -241,9 +246,9 @@ def main(params, logging):
     elif model_type == 'multi':
         model = Naive_model(scale=params.scale, filename=params.model_path,spynet_pretrained='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic':
-        model = BasicVSR(num_feat=16, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+        model = BasicVSR(num_feat=24, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic_mv':
-        model = MotionVectorVSR(num_feat=16, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+        model = MotionVectorVSR(num_feat=20, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     else:
         raise Exception("未知模型")
     logging.info(f"\n{model}", is_print=False, device=device)
@@ -279,7 +284,7 @@ def main(params, logging):
 
     if params.eval_model:
         evaluation(model, eval_data_loaders, 0, writer, device=device)
-        return
+        
 
     # All optimizer functions and scheduler functions
     optimizer, scheduler = trainer_preparation(model=model,
@@ -293,6 +298,7 @@ def main(params, logging):
               train_data_loader=train_data_loader,
               criterions=criterions,
               writer=writer, params=params, epoch=epoch, device=device)
+
         evaluation(model, eval_data_loaders, epoch, writer, device=device)
         if device == 0:
             torch.save(model.state_dict() if not params.distributed else model.module.state_dict(),
@@ -337,6 +343,7 @@ if __name__ == '__main__':
                         help=" ")
     parser.add_argument('--train_sample_patch', default=True, type=int,
                         help=" ")
+    parser.add_argument("--save", default=True, type=int)
 
     # evaluation
     parser.add_argument('--eval_only', default=False, action='store_true',

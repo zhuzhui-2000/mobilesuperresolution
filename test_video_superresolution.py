@@ -29,6 +29,8 @@ import random
 from models.single_image_model import Result_Model
 from models.naive_multi_model_easy import Naive_model
 from models.basicvsr_arch import BasicVSR
+from models.mvvsr_arch import MotionVectorVSR
+from models.basicvsr_arch_origin import BasicVSR_origin
 
 
 def setup_seed(seed):
@@ -133,7 +135,7 @@ def evaluation(model, eval_data_loaders, epoch, writer, device):
             handle_dict = {'job_dir': writer.get_logdir(),
                            'epoch': epoch,
                            'eval_data_name': eval_data_name, }
-            psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict)
+            psnr, psnr_y, ssim, speed, bilinear_psnr, bilinear_ssim = test(eval_data_loader, model, gpu=device, f=handle_dict,save=params.save)
             writer.add_scalar(f"{eval_data_name}/PSNR", psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/bilinear_PSNR", bilinear_psnr, epoch)
             writer.add_scalar(f"{eval_data_name}/PSNR_Y", psnr_y, epoch)
@@ -223,7 +225,12 @@ def main(params, logging):
     elif model_type == 'multi':
         model = Naive_model(scale=params.scale, filename=params.model_path,spynet_pretrained='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
     elif model_type == 'basic':
-        model = BasicVSR(num_feat=24, num_block=7, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+        model = BasicVSR(num_feat=20, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+    elif model_type == 'basic_origin':
+        model = BasicVSR_origin(num_feat=64, num_block=30,spynet_path = '/home/zhuzhui/BasicSR/experiments/pretrained_models/flownet/spynet_sintel_final-3d2a1287.pth')
+    elif model_type == 'basic_mv':
+        model = MotionVectorVSR(num_feat=20, num_block=8, spynet_path='/home/zhuzhui/BasicVSR_PlusPlus/model/spynet_20210409-c6c1bd09.pth')
+    
     else:
         raise Exception("未知模型")
     logging.info(f"\n{model}", is_print=False, device=device)
@@ -237,8 +244,9 @@ def main(params, logging):
     criterions['l1'] = L1_Charbonnier_loss().to(device)
 
     if params.eval_model:
-        model.load_state_dict(torch.load(params.eval_model),strict=True)
-        # model.load_state_dict(torch.load(params.eval_model)['params'],strict=True)
+        #print(torch.load(params.eval_model).keys())
+        #model.load_state_dict(torch.load(params.eval_model),strict=True)
+        model.load_state_dict(torch.load(params.eval_model)['params'],strict=True)
 
     if device == 0:
         for folder in ['results', 'weights', 'ckpt', 'eval']:
@@ -283,6 +291,8 @@ if __name__ == '__main__':
                         help=" ")
     parser.add_argument('--val_image_batch', default=100, type=int,
                         help=" ")
+    parser.add_argument('--save', default=True, type=int)
+
 
     # evaluation
     parser.add_argument('--eval_only', default=False, action='store_true',

@@ -7,7 +7,7 @@ model_type='basic'  # NAS_MODEL / BASIC_MODEL
 
 epochs=50
 num_patches=2   # default 1000
-train_batch_size=8 # default 16
+train_batch_size=10 # default 16
 lr_patch_size=64    # default 48
 
 # arch
@@ -45,16 +45,17 @@ printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 python  train_video_superresolution.py \
   --model_type $model_type \
   --dataset reds \
-  --eval_datasets reds \
+  --eval_datasets nemo \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
   --scale $scale \
-  --learning_rate 0.00025 \
+  --learning_rate 0.0002 \
   --train_batch_size $train_batch_size \
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --image_batch 15 \
+  --image_batch 20 \
+  --val_image_batch 50 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
-  --job_dir runs/$job_dir
+  --job_dir /data/zhuz/runs/$job_dir
 

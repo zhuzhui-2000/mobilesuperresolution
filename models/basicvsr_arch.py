@@ -29,11 +29,12 @@ class BasicVSR(nn.Module):
         self.forward_trunk = ConvResidualBlocks(num_feat + 3, num_feat, num_block)
 
         # reconstruction
-        self.fusion = nn.Conv2d(num_feat * 2, num_feat * 2 , 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(num_feat * 2, num_feat *2  , 1, 1, 0, bias=True)
         self.upconv1 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(num_feat, num_feat * 4, 3, 1, 1, bias=True)
-        self.conv_hr = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
-        self.conv_last = nn.ConvTranspose2d(num_feat * 2,3,5,stride=self.scale)
+        # self.conv_hr = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
+        self.conv_last = nn.ConvTranspose2d(num_feat * 2,num_feat,5,stride=self.scale)
+        self.conv_hr = nn.Conv2d(num_feat, 3, 3, 1, 1)
 
 
         self.pixel_shuffle = nn.PixelShuffle(2)
@@ -91,6 +92,7 @@ class BasicVSR(nn.Module):
             out = self.lrelu(self.fusion(out))
             # out = self.lrelu(self.pixel_shuffle(self.upconv1(out)))
             # out = self.lrelu(self.pixel_shuffle(self.upconv2(out)))
+            # out = self.lrelu(self.conv_last(out))
             out = self.conv_last(out)
             
             out = nn.functional.interpolate(out,size=(height,weight),mode='bilinear')

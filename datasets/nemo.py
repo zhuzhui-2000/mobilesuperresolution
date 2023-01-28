@@ -2,12 +2,16 @@ import os
 
 import common.modes
 import datasets._vsr
+import random
+import numpy as np
+import csv
+video_num = 4
 
 LOCAL_DIR = '/data/zhuz/reds'
-TRAIN_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/2/image/240p_512kbps_s0_d300.webm'
-TRAIN_HR_DIR = '/data/zhuz/nemo/2'
-EVAL_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/2/image/240p_512kbps_s0_d300.webm'
-EVAL_HR_DIR = '/data/zhuz/nemo/2'
+TRAIN_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/'+str(video_num)+'/image/240p_512kbps_s0_d300.webm'
+TRAIN_HR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/'+str(video_num)+'/image/2160p_12000kbps_s0_d300.webm'
+EVAL_LR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/'+str(video_num)+'/image/240p_512kbps_s0_d300.webm'
+EVAL_HR_DIR = '/data/jinxinqi/Dataset/SuperResolution/NEMO-Dataset/'+str(video_num)+'/image/2160p_12000kbps_s0_d300.webm'
 
 
 def update_argparser(parser):
@@ -93,8 +97,8 @@ class REDS(datasets._vsr.NemoHdf5Dataset):
 
     def __init__(self, mode, params):
 
-        lr_cache_file = 'data/cache/nemo_{}_lr_x{}.h5'.format('train', params.scale)
-        hr_cache_file = 'data/cache/nemo_{}_hr.h5'.format('train')
+        lr_cache_file = '/data/zhuz/cache/nemo_{}_{}_lr_x{}.h5'.format(video_num,'train', params.scale)
+        hr_cache_file = '/data/zhuz/cache/nemo_{}_{}_hr.h5'.format(video_num,'train')
 
         lr_dir = {
             common.modes.TRAIN: TRAIN_LR_DIR,
@@ -111,10 +115,24 @@ class REDS(datasets._vsr.NemoHdf5Dataset):
 
 
         lr_files = list_image_files(lr_dir,mode,image_iter)
+        
         if mode == common.modes.PREDICT:
             hr_files = lr_files
         else:
             hr_files = list_image_files(hr_dir,mode,image_iter)
+
+        if mode == common.modes.TRAIN:
+            file_in = '_train.csv'
+        else:
+            file_in = '_eval.csv'
+        with open(os.path.join(params.job_dir,'lr'+file_in),'w',newline='') as f_csv:
+            writer = csv.writer(f_csv)
+            for l in lr_files:
+                writer.writerow(l)
+        with open(os.path.join(params.job_dir,'hr'+file_in),'w',newline='') as f_csv:
+            writer = csv.writer(f_csv)
+            for l in hr_files:
+                writer.writerow(l)
 
         super(REDS, self).__init__(
             mode,
@@ -132,7 +150,8 @@ def list_image_files(d,mode, image_batch=10):
     
     files_lists_ = []
     if mode == common.modes.TRAIN:
-        for batch in range(0,file_num+1-image_batch):
+        
+        for batch in range(0,file_num+1-image_batch,25):
             files_lists_.append(files[batch:batch+image_batch])
     else:
         for batch in range(0,file_num+1-image_batch,image_batch):

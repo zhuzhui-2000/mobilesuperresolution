@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=1
 
 # Experiments
 
-model_type='single'  # NAS_MODEL / BASIC_MODEL
+model_type='basic_origin'  # NAS_MODEL / BASIC_MODEL
 
 epochs=100
 num_patches=12    # default 1000
@@ -44,7 +44,7 @@ printf '%s\n' "Training Model on GPU ${CUDA_VISIBLE_DEVICES}"
 
 python  test_video_superresolution.py \
   --model_type $model_type \
-  --dataset nemo \
+  --dataset reds \
   --eval_datasets nemo \
   --num_blocks $num_blocks \
   --num_residual_units $num_residual_units \
@@ -54,9 +54,10 @@ python  test_video_superresolution.py \
   --num_patches $num_patches \
   --lr_patch_size $lr_patch_size \
   --epochs $epochs \
-  --eval_model '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x4_16_24_Jan16_17_12_35/weights/models.pt' \
-  --image_batch 50 \
-  --val_image_batch 50 \
+  --eval_model '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/models/pretrained_weights/BasicVSR_Vimeo90K_BIx4-2a29695a.pth' \
+  --image_batch 1 \
+  --val_image_batch 25 \
+  --save 0 \
   --model_path '/home/zhuzhui/super-resolution/MyNAS/compiler-aware-nas-sr/runs/wdsr_b_x2_16_32_Dec22_21_04_48/block_index.txt' \
-  --job_dir runs/$job_dir
+  --job_dir /data/zhuz/runs/$job_dir
 
